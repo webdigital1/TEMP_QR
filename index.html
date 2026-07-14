@@ -215,12 +215,31 @@
             applyMirrorStyle();
         };
 
-        // Memuat Data Dari Local Storage
+        // Memuat Data Dari Local Storage & Menyelaraskan Urutan Kronologis (Anti-Scramble)
         function loadSavedData() {
             try {
                 const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
                 if (storedData) {
-                    qrDataList = JSON.parse(storedData);
+                    let parsedData = JSON.parse(storedData);
+                    
+                    // Migrasi data lama bertipe string biasa menjadi struktur objek ber-timestamp
+                    parsedData = parsedData.map((item, idx) => {
+                        if (typeof item === 'string') {
+                            return {
+                                text: item,
+                                timestamp: new Date(Date.now() - (parsedData.length - idx) * 1000).toISOString()
+                            };
+                        }
+                        if (!item.timestamp) {
+                            item.timestamp = new Date().toISOString();
+                        }
+                        return item;
+                    });
+
+                    // Urutkan secara kronologis tertua -> terbaru secara internal di memori
+                    parsedData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                    
+                    qrDataList = parsedData;
                 } else {
                     qrDataList = [];
                 }
@@ -241,7 +260,8 @@
             renderTable();
         }
 
-        // Render Ulang Tabel Riwayat
+        // Render Tabel Riwayat: Membalikkan urutan tampilan agar DATA TERBARU selalu di ATAS
+        // Namun nomor urut (No.) tetap merepresentasikan indeks aslinya (Data 1 = No.1, Data N = No.N)
         function renderTable() {
             const tbody = document.getElementById('data-table-body');
             const emptyState = document.getElementById('empty-state');
@@ -259,18 +279,26 @@
             emptyState.classList.add('hidden');
             tbody.closest('div').classList.remove('hidden');
 
-            qrDataList.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.className = "hover:bg-slate-50 transition";
+            // Render terbalik (Newest on Top)
+            const reversedList = qrDataList.slice().reverse();
+
+            reversedList.forEach((item, reverseIndex) => {
+                // Cari indeks asli di array asal untuk keperluan hapus baris
+                const actualIndex = qrDataList.length - 1 - reverseIndex;
                 
-                // Cek apakah item adalah objek atau string lama
+                // Menentukan nomor urut absolut (Data tertua = 1, Data terbaru = N)
+                const itemNumber = actualIndex + 1; 
+                
+                const row = document.createElement('tr');
+                row.className = "hover:bg-slate-50 transition border-b border-slate-100";
+                
                 const resultText = typeof item === 'object' ? item.text : item;
 
                 row.innerHTML = `
-                    <td class="px-4 py-3 font-semibold text-slate-400">${index + 1}</td>
+                    <td class="px-4 py-3 font-semibold text-slate-400">${itemNumber}</td>
                     <td class="px-4 py-3 break-all font-mono text-xs select-all text-slate-800">${escapeHtml(resultText)}</td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="deleteRow(${index})" class="text-slate-400 hover:text-rose-500 p-1 rounded-lg hover:bg-slate-100 transition inline-flex items-center justify-center">
+                        <button onclick="deleteRow(${actualIndex})" class="text-slate-400 hover:text-rose-500 p-1 rounded-lg hover:bg-slate-100 transition inline-flex items-center justify-center">
                             <i data-lucide="trash" class="w-4 h-4"></i>
                         </button>
                     </td>
@@ -364,10 +392,9 @@
             const trimmedText = text.trim();
             if (!trimmedText) return;
 
-            // Cek duplikasi berurutan untuk menghindari pindaian ganda yang tidak sengaja
-            // Karena susunan baru berada di indeks awal (unshift), item terbaru ada di qrDataList[0]
+            // Cek duplikasi berurutan (karena urutan kronologis, item terbaru ada di ujung akhir array)
             if (qrDataList.length > 0) {
-                const newestItem = qrDataList[0];
+                const newestItem = qrDataList[qrDataList.length - 1];
                 const newestText = typeof newestItem === 'object' ? newestItem.text : newestItem;
                 if (newestText === trimmedText) {
                     playErrorSound(); // Bunyi ERROR jika terdeteksi double scan
@@ -381,8 +408,8 @@
                 }
             }
 
-            // Guna 'unshift' untuk meletakkan item baharu di baris paling atas (indeks 0)
-            qrDataList.unshift({
+            // Simpan kronologis di ujung akhir array
+            qrDataList.push({
                 text: trimmedText,
                 timestamp: new Date().toISOString()
             });
@@ -409,9 +436,9 @@
             }
         }
 
-        // Hapus Baris Tertentu
-        function deleteRow(index) {
-            qrDataList.splice(index, 1);
+        // Hapus Baris Tertentu berdasarkan indeks asli
+        function deleteRow(actualIndex) {
+            qrDataList.splice(actualIndex, 1);
             saveDataToStorage();
             showToast("Satu data dihapus", "trash");
         }
@@ -441,7 +468,7 @@
             showToast("Semua data berhasil dibersihkan", "trash-2");
         }
 
-        // Ekspor ke Excel (Format CSV agar kompatibel langsung dengan Excel)
+        // Ekspor ke Excel (Format CSV agar kompatibel langsung dengan Excel) - Urutan Terbaru di Atas
         function exportToExcel() {
             if (qrDataList.length === 0) {
                 showToast("Tidak ada data untuk diekspor!", "alert-circle");
@@ -452,11 +479,16 @@
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // Byte Order Mark (BOM) agar karakter khusus terbaca benar di Excel
             csvContent += "no.,qr code result\n";
 
-            qrDataList.forEach((item, index) => {
+            // Ekspor dengan urutan terbaru di atas
+            const reversedList = qrDataList.slice().reverse();
+            reversedList.forEach((item, index) => {
                 const text = typeof item === 'object' ? item.text : item;
-                // Escaping quotes di CSV
                 const safeText = `"${text.replace(/"/g, '""')}"`;
-                csvContent += `${index + 1},${safeText}\n`;
+                
+                // Mendapatkan No. absolut yang sesuai dengan tampilan layar
+                const itemNumber = reversedList.length - index;
+                
+                csvContent += `${itemNumber},${safeText}\n`;
             });
 
             const encodedUri = encodeURI(csvContent);
@@ -469,21 +501,27 @@
             showToast("Berhasil ekspor ke Excel!", "file-spreadsheet");
         }
 
-        // Ekspor ke Notepad (.txt)
+        // Ekspor ke Notepad (.txt) - Urutan Terbaru di Atas
         function exportToNotepad() {
             if (qrDataList.length === 0) {
                 showToast("Tidak ada data untuk diekspor!", "alert-circle");
                 return;
             }
 
-            let textContent = "HASIL SCAN QR CODE\n";
+            let textContent = "HASIL SCAN QR CODE (TERBARU -> TERLAMA)\n";
             textContent += "========================================\n";
             textContent += "no.\t|\tqr code result\n";
             textContent += "========================================\n";
 
-            qrDataList.forEach((item, index) => {
+            // Ekspor dengan urutan terbaru di atas
+            const reversedList = qrDataList.slice().reverse();
+            reversedList.forEach((item, index) => {
                 const text = typeof item === 'object' ? item.text : item;
-                textContent += `${index + 1}\t|\t${text}\n`;
+                
+                // Mendapatkan No. absolut yang sesuai dengan tampilan layar
+                const itemNumber = reversedList.length - index;
+                
+                textContent += `${itemNumber}\t|\t${text}\n`;
             });
 
             // Menggunakan Blob untuk mendownload sebagai file plain text (.txt)
