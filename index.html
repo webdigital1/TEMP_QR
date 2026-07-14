@@ -303,30 +303,95 @@
             showToast(isMirrored ? "Efek Cermin Aktif" : "Efek Cermin Nonaktif", "flip-horizontal");
         }
 
+        // --- SISTEM SUARA (WEB AUDIO API) ---
+        
+        // Membunyikan suara beep sukses (nada tinggi bersinar)
+        function playSuccessSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(1200, audioCtx.currentTime); // 1200Hz Beep
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                // Efek fade-out cepat agar suara terdengar bersih
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.15);
+            } catch (e) {
+                console.warn("Gagal membunyikan audio sukses:", e);
+            }
+        }
+
+        // Membunyikan suara error / duplikat ganda (dua kali buzz rendah)
+        function playErrorSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Bunyi buzz pertama
+                playBuzzSegment(audioCtx, 0);
+                // Bunyi buzz kedua setelah jeda singkat
+                playBuzzSegment(audioCtx, 0.15);
+            } catch (e) {
+                console.warn("Gagal membunyikan audio error:", e);
+            }
+        }
+
+        // Membantu membuat suara buzz rendah
+        function playBuzzSegment(audioCtx, startTime) {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.type = 'sawtooth'; // Bentuk gelombang kasar untuk suara buzz
+            oscillator.frequency.setValueAtTime(180, audioCtx.currentTime + startTime); // Nada rendah 180Hz
+            gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime + startTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + startTime + 0.12);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start(audioCtx.currentTime + startTime);
+            oscillator.stop(audioCtx.currentTime + startTime + 0.15);
+        }
+
         // Tambah Data Baru
         function addScannedData(text) {
             const trimmedText = text.trim();
             if (!trimmedText) return;
 
             // Cek duplikasi berurutan untuk menghindari pindaian ganda yang tidak sengaja
+            // Karena susunan baru berada di indeks awal (unshift), item terbaru ada di qrDataList[0]
             if (qrDataList.length > 0) {
-                const lastItem = qrDataList[qrDataList.length - 1];
-                const lastText = typeof lastItem === 'object' ? lastItem.text : lastItem;
-                if (lastText === trimmedText) {
-                    showToast("Data QR sama terdeteksi!", "info");
+                const newestItem = qrDataList[0];
+                const newestText = typeof newestItem === 'object' ? newestItem.text : newestItem;
+                if (newestText === trimmedText) {
+                    playErrorSound(); // Bunyi ERROR jika terdeteksi double scan
+                    showToast("Data QR sama terdeteksi!", "alert-triangle");
+                    
+                    // Pola getar ganda untuk memberi tahu ada error duplikat
+                    if (navigator.vibrate) {
+                        navigator.vibrate([100, 80, 100]);
+                    }
                     return;
                 }
             }
 
-            qrDataList.push({
+            // Guna 'unshift' untuk meletakkan item baharu di baris paling atas (indeks 0)
+            qrDataList.unshift({
                 text: trimmedText,
                 timestamp: new Date().toISOString()
             });
 
             saveDataToStorage();
+            playSuccessSound(); // Bunyi BEEP SUKSES setelah scan tersimpan
             showToast("QR Berhasil Disimpan!", "check-circle");
             
-            // Getaran pendek di smartphone sebagai feedback sukses (jika didukung perangkat)
+            // Getaran pendek tunggal untuk pertanda sukses
             if (navigator.vibrate) {
                 navigator.vibrate(100);
             }
