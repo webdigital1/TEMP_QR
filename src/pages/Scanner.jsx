@@ -3,7 +3,7 @@ import { QrCode, Camera, FlipHorizontal, Play, Square, Database, Keyboard, Plus,
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbyWMRVjxxFRAm2X4Zq7-mNvRd34-tC9skre5lUQLA7dofFerXKAFa2l3EWPcYak1hVL/exec";
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbyqXJeBHMMiuQku_miS7C0MB07h4B9qPE3x5x20UE6vhXFKlhpt8LLKHDYIs_jJutbO/exec";
 const LOCAL_STORAGE_KEY = 'qr_react_scanned_data';
 
 export default function Scanner() {
@@ -15,6 +15,7 @@ export default function Scanner() {
   const [manualInput, setManualInput] = useState('');
   const [toast, setToast] = useState({ show: false, msg: '', icon: 'check-circle' });
   const html5QrCodeRef = useRef(null);
+  const lastScannedRef = useRef({ text: '', time: 0 });
   const [showClearModal, setShowClearModal] = useState(false);
 
   useEffect(() => {
@@ -56,16 +57,16 @@ export default function Scanner() {
     } catch (e) { /* ignore */ }
   };
 
-  const sendToGoogleSheet = (number, qrText, itemIndex, currentDataList) => {
-    const targetUrl = `${SHEET_URL}?action=add&no=${encodeURIComponent(number)}&qr=${encodeURIComponent(qrText)}`;
+  const sendToGoogleSheet = (qrText, itemId) => {
+    const targetUrl = `${SHEET_URL}?action=add&no=Auto&qr=${encodeURIComponent(qrText)}`;
     fetch(targetUrl, { mode: 'no-cors' }).then(() => {
       showToast(`Terkirim ke Sheet!`, "cloud-lightning");
-      if (itemIndex !== undefined) {
-        const newData = [...currentDataList];
-        if (newData[itemIndex]) {
-          newData[itemIndex].uploaded = true;
-          saveToStorage(newData);
-        }
+      if (itemId) {
+        setQrDataList(prev => {
+          const newData = prev.map(item => item.id === itemId ? { ...item, uploaded: true } : item);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
+          return newData;
+        });
       }
     }).catch(err => {
       console.error(err);
@@ -77,26 +78,32 @@ export default function Scanner() {
     const trimmedText = text.trim();
     if (!trimmedText) return;
 
+    const now = Date.now();
+    // Halang imbasan yang sama berturut-turut dalam masa 3 saat
+    if (lastScannedRef.current.text === trimmedText && (now - lastScannedRef.current.time < 3000)) {
+      showToast("Data QR sama terdeteksi!", "alert-triangle");
+      if (navigator.vibrate) navigator.vibrate([100, 80, 100]);
+      return;
+    }
+    
+    lastScannedRef.current = { text: trimmedText, time: now };
+
+    const newItemId = Date.now().toString() + Math.random().toString();
+    const newItem = { id: newItemId, text: trimmedText, timestamp: new Date().toISOString(), uploaded: false };
+    
     setQrDataList(prev => {
-      if (prev.length > 0 && prev[prev.length - 1].text === trimmedText) {
-        showToast("Data QR sama terdeteksi!", "alert-triangle");
-        if (navigator.vibrate) navigator.vibrate([100, 80, 100]);
-        return prev;
-      }
-
-      const newItem = { text: trimmedText, timestamp: new Date().toISOString(), uploaded: false };
       const newData = [...prev, newItem];
-      
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
-      playSuccessSound();
-      showToast("QR Berhasil Disimpan!");
-      if (navigator.vibrate) navigator.vibrate(100);
-
-      if (autoSync) {
-        sendToGoogleSheet(newData.length, trimmedText, newData.length - 1, newData);
-      }
       return newData;
     });
+
+    playSuccessSound();
+    showToast("QR Berhasil Disimpan!");
+    if (navigator.vibrate) navigator.vibrate(100);
+
+    if (autoSync) {
+      sendToGoogleSheet(trimmedText, newItemId);
+    }
   };
 
   const syncAllToSheet = () => {
@@ -106,11 +113,11 @@ export default function Scanner() {
     }
     let delay = 0;
     let uploadedCount = 0;
-    qrDataList.forEach((item, index) => {
+    qrDataList.forEach((item) => {
       if (!item.uploaded) {
         uploadedCount++;
         setTimeout(() => {
-          sendToGoogleSheet(index + 1, item.text, index, qrDataList);
+          sendToGoogleSheet(item.text, item.id);
         }, delay);
         delay += 400;
       }
@@ -119,6 +126,25 @@ export default function Scanner() {
       showToast("Semua data sudah ada di Sheet!", "check-circle");
     } else {
       showToast(`Memulai upload ${uploadedCount} data...`, "cloud-lightning");
+    }
+  };
+
+  const deleteSingleItem = (idToRemove, itemText, wasUploaded) => {
+    setQrDataList(prev => {
+      const newData = prev.filter(item => item.id !== idToRemove);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
+      return newData;
+    });
+
+    if (wasUploaded) {
+      const targetUrl = `${SHEET_URL}?action=delete&qr=${encodeURIComponent(itemText)}`;
+      fetch(targetUrl, { mode: 'no-cors' }).then(() => {
+        showToast("Data turut dipadam di Sheet", "trash-2");
+      }).catch(err => {
+        console.error(err);
+      });
+    } else {
+      showToast("Data lokal dipadam");
     }
   };
 
@@ -196,6 +222,35 @@ export default function Scanner() {
           </div>
         </section>
 
+        {/* Bahagian Input Manual */}
+        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+          <div className="flex justify-between items-center mb-3">
+            <span className="flex items-center text-sm font-semibold text-slate-500 uppercase tracking-wider">
+              <Keyboard className="w-4 h-4 mr-1.5 text-blue-500" /> Masukkan Manual
+            </span>
+          </div>
+          <div className="flex space-x-2">
+            <input 
+              type="text" 
+              value={manualInput}
+              onChange={(e) => setManualInput(e.target.value)}
+              placeholder="Taip kod atau URL di sini..." 
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button 
+              onClick={() => {
+                if(manualInput.trim()){
+                  addScannedData(manualInput);
+                  setManualInput('');
+                }
+              }} 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl font-semibold transition flex items-center justify-center shadow-sm"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+        </section>
+
         <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
           <div className="flex justify-between items-center mb-3">
             <span className="flex items-center text-sm font-semibold text-slate-500 uppercase tracking-wider">
@@ -232,15 +287,34 @@ export default function Scanner() {
                 <tr>
                   <th className="px-4 py-3 text-left w-12">No.</th>
                   <th className="px-4 py-3 text-left">Hasil QR</th>
+                  <th className="px-4 py-3 text-right w-12"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {[...qrDataList].reverse().map((item, idx) => {
                   const actualIndex = qrDataList.length - 1 - idx;
                   return (
-                    <tr key={actualIndex}>
+                    <tr key={item.id || actualIndex}>
                       <td className="px-4 py-2 font-semibold text-slate-400">{actualIndex + 1}</td>
-                      <td className="px-4 py-2 break-all font-mono text-xs">{item.text}</td>
+                      <td className="px-4 py-2 break-all font-mono text-xs">
+                        <div className="flex items-center space-x-2">
+                          <span>{item.text}</span>
+                          {item.uploaded && (
+                            <span className="flex items-center text-emerald-500" title="Berjaya di-upload">
+                              <CheckCircle className="w-4 h-4 animate-pulse" />
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <button 
+                          onClick={() => deleteSingleItem(item.id, item.text, item.uploaded)}
+                          className="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg transition"
+                          title="Hapus"
+                        >
+                          <Trash className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}

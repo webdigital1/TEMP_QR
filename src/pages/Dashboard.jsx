@@ -1,31 +1,38 @@
 import { useState, useEffect } from 'react';
-import { Monitor, Smartphone, RefreshCw, FolderOpen, Search, Download } from 'lucide-react';
+import { Monitor, Smartphone, RefreshCw, FolderOpen, Search, Download, Copy, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbyWMRVjxxFRAm2X4Zq7-mNvRd34-tC9skre5lUQLA7dofFerXKAFa2l3EWPcYak1hVL/exec";
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbyqXJeBHMMiuQku_miS7C0MB07h4B9qPE3x5x20UE6vhXFKlhpt8LLKHDYIs_jJutbO/exec";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [copiedId, setCopiedId] = useState(null);
 
-  const fetchData = () => {
-    setLoading(true);
+  const fetchData = (silent = false) => {
+    if (!silent) setLoading(true);
     fetch(`${SHEET_URL}?action=read`)
       .then(res => res.json())
       .then(fetchedData => {
         setData(fetchedData);
-        setLoading(false);
+        if (!silent) setLoading(false);
       })
       .catch(err => {
         console.error(err);
-        setLoading(false);
+        if (!silent) setLoading(false);
       });
   };
 
   useEffect(() => {
     fetchData();
+    // Auto-refresh setiap 10 saat (silent mode)
+    const intervalId = setInterval(() => {
+      fetchData(true);
+    }, 10000);
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   const filteredData = data.filter((row, index) => {
@@ -119,7 +126,22 @@ export default function Dashboard() {
                   filteredData.map((row, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">{row[0]}</td>
-                      <td className="px-6 py-4 text-sm text-slate-700 font-mono select-all break-all">{row[1]}</td>
+                      <td className="px-6 py-4 text-sm text-slate-700 font-mono">
+                        <div className="flex items-center justify-between group">
+                          <span className="break-all pr-4">{row[1]}</span>
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(row[1] || "");
+                              setCopiedId(idx);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            className="text-slate-300 group-hover:text-indigo-500 hover:bg-indigo-50 p-1.5 rounded transition"
+                            title="Salin QR"
+                          >
+                            {copiedId === idx ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{row[2]}</td>
                     </tr>
                   ))
