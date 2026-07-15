@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { QrCode, Camera, FlipHorizontal, Play, Square, Database, Keyboard, Plus, History, Trash2, FileSpreadsheet, FileText, Monitor, CheckCircle, AlertTriangle, CloudLightning, Focus, Inbox, Trash, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { QrCode, Camera, FlipHorizontal, Play, Square, Database, Keyboard, Plus, History, Trash2, FileSpreadsheet, FileText, Monitor, CheckCircle, AlertTriangle, CloudLightning, Focus, Inbox, Trash, ChevronDown, ChevronUp, Settings, X, GripHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -17,8 +17,55 @@ export default function Scanner() {
   const html5QrCodeRef = useRef(null);
   const lastScannedRef = useRef({ text: '', time: 0 });
   const [showClearModal, setShowClearModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [recentScanId, setRecentScanId] = useState(null);
   const [isMinimized, setIsMinimized] = useState(false);
+
+  // Dragging State
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const boxStartPos = useRef({ x: 0, y: 0 });
+
+  const handleDragStart = (e) => {
+    // Only drag if targeting the header area
+    if (e.target.closest('.no-drag')) return;
+    setIsDragging(true);
+    const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+    const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    dragStartPos.current = { x: clientX, y: clientY };
+    boxStartPos.current = { ...position };
+  };
+
+  const handleDrag = useCallback((e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+    const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    setPosition({
+      x: boxStartPos.current.x + (clientX - dragStartPos.current.x),
+      y: boxStartPos.current.y + (clientY - dragStartPos.current.y)
+    });
+  }, [isDragging]);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleDrag);
+      window.addEventListener('mouseup', handleDragEnd);
+      window.addEventListener('touchmove', handleDrag, { passive: false });
+      window.addEventListener('touchend', handleDragEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleDrag);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDrag);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [isDragging, handleDrag, handleDragEnd]);
 
   useEffect(() => {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -181,6 +228,8 @@ export default function Scanner() {
     }
   };
 
+  const isNearBottom = position.y > (window.innerHeight / 2 - 100);
+
   return (
     <div className="bg-slate-50 text-slate-800 font-sans min-h-screen pb-8">
       <header className="bg-indigo-600 text-white shadow-md sticky top-0 z-50 px-4 py-4 flex items-center justify-between">
@@ -188,34 +237,48 @@ export default function Scanner() {
           <QrCode className="w-6 h-6" />
           <h1 className="text-lg font-bold tracking-tight">QR Scanner</h1>
         </div>
-        <button onClick={() => navigate('/desktop')} className="bg-indigo-500 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition shadow-sm border border-indigo-400">
-          <Monitor className="w-4 h-4 mr-1.5" />
-          Desktop
-        </button>
+        <div className="flex items-center space-x-3">
+          <button onClick={() => setShowSettingsModal(true)} className="p-2 bg-indigo-500 hover:bg-indigo-700 text-white rounded-lg transition shadow-sm border border-indigo-400">
+            <Settings className="w-4 h-4" />
+          </button>
+          <button onClick={() => navigate('/desktop')} className="bg-indigo-500 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition shadow-sm border border-indigo-400">
+            <Monitor className="w-4 h-4 mr-1.5" />
+            Desktop
+          </button>
+        </div>
       </header>
 
       <main className="p-4 space-y-4 max-w-lg mx-auto">
-        {/* Bahagian Kamera - Dijadikan Floating (Fixed Kanan Atas) */}
-        <section className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 p-3 fixed top-[76px] right-4 z-40 transform transition-all overflow-hidden w-[260px]">
-          <div className={`flex justify-between items-center ${isMinimized ? '' : 'mb-3'}`}>
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center">
+        {/* Bahagian Kamera - Dijadikan Floating (Fixed Kanan Atas) & Boleh Drag */}
+        <section 
+          className={`bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 p-2.5 fixed top-[76px] right-4 z-40 overflow-hidden w-[220px] sm:w-[260px] flex flex-col cursor-grab active:cursor-grabbing ${isDragging ? 'cursor-grabbing' : ''}`}
+          style={{ transform: `translate(${position.x}px, ${position.y}px)`, transition: isDragging ? 'none' : 'transform 0.1s' }}
+          onMouseDown={handleDragStart}
+          onTouchStart={handleDragStart}
+        >
+          <div 
+            className={`flex justify-between items-center ${isMinimized ? '' : (isNearBottom ? 'mt-3' : 'mb-3')}`}
+            style={{ order: isNearBottom ? 2 : 1 }}
+          >
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center select-none pointer-events-none">
+              <GripHorizontal className="w-4 h-4 mr-1 text-slate-400" />
               <Camera className="w-4 h-4 mr-1.5 text-indigo-500" /> Scanner
             </h2>
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 no-drag">
               {!isMinimized && (
                 <button onClick={() => setIsMirrored(!isMirrored)} className="text-[11px] bg-slate-100 px-2 py-1 rounded-full font-semibold flex items-center space-x-1" title="Mirror Camera">
                   <FlipHorizontal className="w-3.5 h-3.5 text-slate-500" />
                 </button>
               )}
               <button onClick={() => setIsMinimized(!isMinimized)} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1 rounded-full transition" title={isMinimized ? "Buka Kamera" : "Tutup Kamera"}>
-                {isMinimized ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                {isMinimized ? <ChevronDown className="w-5 h-5 pointer-events-none" /> : <ChevronUp className="w-5 h-5 pointer-events-none" />}
               </button>
             </div>
           </div>
           
           {!isMinimized && (
-            <>
-              <div className="relative rounded-xl overflow-hidden bg-slate-900 border-2 border-slate-800 shadow-inner h-[200px] w-full flex items-center justify-center">
+            <div style={{ order: isNearBottom ? 1 : 2 }}>
+              <div className="relative rounded-xl overflow-hidden bg-slate-900 border-2 border-slate-800 shadow-inner h-[180px] w-full flex items-center justify-center">
                 <div id="reader" className={`w-full h-full [&_video]:object-cover [&_video]:h-full ${isMirrored ? 'scale-x-[-1]' : ''}`}></div>
                 {!isScanning && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-4 text-center space-y-3 z-10 bg-slate-900">
@@ -225,7 +288,7 @@ export default function Scanner() {
                 )}
               </div>
 
-              <div className="mt-3 flex space-x-3">
+              <div className="mt-3 flex space-x-3 no-drag">
                 {!isScanning ? (
                   <button onClick={startScanner} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 px-4 rounded-xl font-medium flex justify-center items-center space-x-2 transition shadow-sm">
                     <Play className="w-4 h-4" /> <span className="text-sm">Mula Scan</span>
@@ -236,7 +299,7 @@ export default function Scanner() {
                   </button>
                 )}
               </div>
-            </>
+            </div>
           )}
         </section>
 
@@ -269,25 +332,6 @@ export default function Scanner() {
           </div>
         </section>
 
-        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-          <div className="flex justify-between items-center mb-3">
-            <span className="flex items-center text-sm font-semibold text-slate-500 uppercase tracking-wider">
-              <Database className="w-4 h-4 mr-1.5 text-emerald-500" /> Google Sheet Sync
-            </span>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <span className="text-xs font-semibold text-slate-600">Auto-Kirim Setiap Scan</span>
-              <input type="checkbox" checked={autoSync} onChange={(e) => {
-                setAutoSync(e.target.checked);
-                localStorage.setItem('qr_react_autosync', e.target.checked);
-              }} className="w-5 h-5 accent-emerald-500" />
-            </div>
-            <button onClick={syncAllToSheet} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-xs font-semibold flex justify-center space-x-2">
-              <CloudLightning className="w-4 h-4" /> <span>Upload Semua Data Lokal</span>
-            </button>
-          </div>
-        </section>
 
         <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 space-y-4">
           <div className="flex justify-between items-center">
@@ -362,6 +406,39 @@ export default function Scanner() {
             <div className="flex space-x-3">
               <button onClick={() => setShowClearModal(false)} className="flex-1 py-2 bg-slate-100 rounded-xl font-medium">Batal</button>
               <button onClick={() => { setQrDataList([]); localStorage.setItem(LOCAL_STORAGE_KEY, "[]"); setShowClearModal(false); }} className="flex-1 py-2 bg-rose-500 text-white rounded-xl font-medium">Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Settings */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
+              <h2 className="text-sm font-bold text-slate-700 flex items-center">
+                <Database className="w-4 h-4 mr-2 text-emerald-500" /> Pengaturan Google Sheet
+              </h2>
+              <button onClick={() => setShowSettingsModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <span className="text-sm font-semibold text-slate-700">Auto-Kirim Setiap Scan</span>
+                <input type="checkbox" checked={autoSync} onChange={(e) => {
+                  setAutoSync(e.target.checked);
+                  localStorage.setItem('qr_react_autosync', e.target.checked);
+                }} className="w-5 h-5 accent-emerald-500" />
+              </div>
+              
+              <button onClick={() => {
+                syncAllToSheet();
+                setShowSettingsModal(false);
+              }} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-xl text-sm font-semibold flex justify-center items-center space-x-2 transition shadow-sm">
+                <CloudLightning className="w-5 h-5" /> <span>Upload Semua Data Lokal</span>
+              </button>
             </div>
           </div>
         </div>

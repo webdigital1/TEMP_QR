@@ -104,45 +104,51 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Jadual Data Imbasan</h2>
-            <a href={SHEET_URL.replace("/exec", "")} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700 text-sm font-semibold flex items-center space-x-1">
+        <section className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm w-[92%] sm:w-full mx-auto">
+          <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center bg-white">
+            <h2 className="text-base font-semibold text-gray-800">Senarai Imbasan</h2>
+            <a href={SHEET_URL.replace("/exec", "")} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center space-x-1 transition">
               <span className="hidden sm:inline">Buka Google Sheet</span>
               <Download className="w-4 h-4" />
             </a>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 hidden md:table-header-group border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-24">No.</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Hasil QR Code</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-64">Tarikh & Masa</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">No</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hasil QR Code</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">Tarikh & Masa</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
+              <tbody className="bg-gray-50 md:bg-white grid grid-cols-2 sm:grid-cols-3 md:grid-cols-none gap-3 p-3 md:p-0 md:gap-0 md:table-row-group divide-none md:divide-y md:divide-gray-100">
                 {filteredData.length > 0 ? (
                   filteredData.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">{row[0]}</td>
-                      <td className="px-6 py-4 text-sm text-slate-700 font-mono">
+                    <tr key={idx} className="bg-white hover:bg-gray-50 transition-colors border border-gray-200 md:border-none rounded-lg md:rounded-none shadow-sm md:shadow-none flex flex-col md:table-row p-3 md:p-0">
+                      <td className="px-0 md:px-4 py-1 md:py-3 text-sm text-gray-500 flex justify-between items-center md:table-cell border-b border-gray-100 md:border-none mb-2 md:mb-0 pb-2 md:pb-0">
+                        <span className="md:hidden text-[10px] font-bold text-gray-400 uppercase tracking-wider">No</span>
+                        <span className="font-semibold md:font-normal">{row[0]}</span>
+                      </td>
+                      <td className="px-0 md:px-4 py-1 md:py-3 text-sm text-gray-800 font-mono flex flex-col md:table-cell flex-1">
+                        <span className="md:hidden text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Hasil QR Code</span>
                         <div className="flex items-center justify-between group">
-                          <span className="break-all pr-4">{row[1]}</span>
+                          <span className="break-all pr-2">{row[1]}</span>
                           <button 
                             onClick={() => {
                               navigator.clipboard.writeText(row[1] || "");
                               setCopiedId(idx);
                               setTimeout(() => setCopiedId(null), 2000);
                             }}
-                            className="text-slate-300 group-hover:text-indigo-500 hover:bg-indigo-50 p-1.5 rounded transition"
+                            className="opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 text-gray-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded transition-all ml-2 md:ml-0"
                             title="Salin QR"
                           >
                             {copiedId === idx ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                           </button>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{row[2]}</td>
+                      <td className="px-0 md:px-4 py-1 md:py-3 text-xs md:text-sm text-gray-400 md:text-gray-500 hidden md:table-cell">
+                        {row[2]}
+                      </td>
                     </tr>
                   ))
                 ) : (
