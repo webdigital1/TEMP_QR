@@ -27,10 +27,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    // Auto-refresh setiap 10 saat (silent mode)
+    // Auto-refresh setiap 2 saat (silent mode)
     const intervalId = setInterval(() => {
       fetchData(true);
-    }, 10000);
+    }, 2000);
     
     return () => clearInterval(intervalId);
   }, []);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { QrCode, Camera, FlipHorizontal, Play, Square, Database, Keyboard, Plus, History, Trash2, FileSpreadsheet, FileText, Monitor, CheckCircle, AlertTriangle, CloudLightning, Focus, Inbox, Trash } from 'lucide-react';
+import { QrCode, Camera, FlipHorizontal, Play, Square, Database, Keyboard, Plus, History, Trash2, FileSpreadsheet, FileText, Monitor, CheckCircle, AlertTriangle, CloudLightning, Focus, Inbox, Trash, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -8,7 +8,7 @@ const LOCAL_STORAGE_KEY = 'qr_react_scanned_data';
 
 export default function Scanner() {
   const navigate = useNavigate();
-  const [isMirrored, setIsMirrored] = useState(true);
+  const [isMirrored, setIsMirrored] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [qrDataList, setQrDataList] = useState([]);
   const [autoSync, setAutoSync] = useState(false);
@@ -17,6 +17,8 @@ export default function Scanner() {
   const html5QrCodeRef = useRef(null);
   const lastScannedRef = useRef({ text: '', time: 0 });
   const [showClearModal, setShowClearModal] = useState(false);
+  const [recentScanId, setRecentScanId] = useState(null);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   useEffect(() => {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -96,6 +98,11 @@ export default function Scanner() {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
       return newData;
     });
+
+    setRecentScanId(newItemId);
+    setTimeout(() => {
+      setRecentScanId(prevId => prevId === newItemId ? null : prevId);
+    }, 3000);
 
     playSuccessSound();
     showToast("QR Berhasil Disimpan!");
@@ -187,39 +194,50 @@ export default function Scanner() {
         </button>
       </header>
 
-      <main className="p-4 max-w-md mx-auto space-y-5">
-        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 overflow-hidden">
-          <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center">
-              <Camera className="w-4 h-4 mr-1.5 text-indigo-500" /> Kamera Scanner
+      <main className="p-4 space-y-4 max-w-lg mx-auto">
+        {/* Bahagian Kamera - Dijadikan Floating (Fixed Kanan Atas) */}
+        <section className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 p-3 fixed top-[76px] right-4 z-40 transform transition-all overflow-hidden w-[260px]">
+          <div className={`flex justify-between items-center ${isMinimized ? '' : 'mb-3'}`}>
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center">
+              <Camera className="w-4 h-4 mr-1.5 text-indigo-500" /> Scanner
             </h2>
-            <button onClick={() => setIsMirrored(!isMirrored)} className="text-[11px] bg-slate-100 px-2.5 py-1 rounded-full font-semibold flex items-center space-x-1">
-              <FlipHorizontal className="w-3.5 h-3.5 text-slate-500" />
-              <span>Mirror: <span className={isMirrored ? "text-indigo-600 font-bold" : "text-slate-500 font-bold"}>{isMirrored ? 'ON' : 'OFF'}</span></span>
-            </button>
+            <div className="flex items-center space-x-1">
+              {!isMinimized && (
+                <button onClick={() => setIsMirrored(!isMirrored)} className="text-[11px] bg-slate-100 px-2 py-1 rounded-full font-semibold flex items-center space-x-1" title="Mirror Camera">
+                  <FlipHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+              )}
+              <button onClick={() => setIsMinimized(!isMinimized)} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1 rounded-full transition" title={isMinimized ? "Buka Kamera" : "Tutup Kamera"}>
+                {isMinimized ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
           
-          <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-square flex flex-col items-center justify-center border-2 border-dashed border-slate-300">
-            <div id="reader" className={`w-full h-full ${isMirrored ? 'scale-x-[-1]' : ''}`}></div>
-            {!isScanning && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-4 text-center space-y-3 z-10 bg-slate-900">
-                <Camera className="w-12 h-12 text-indigo-400" />
-                <p className="text-sm">Klik "Mula" untuk aktifkan kamera.</p>
+          {!isMinimized && (
+            <>
+              <div className="relative rounded-xl overflow-hidden bg-slate-900 border-2 border-slate-800 shadow-inner h-[200px] w-full flex items-center justify-center">
+                <div id="reader" className={`w-full h-full [&_video]:object-cover [&_video]:h-full ${isMirrored ? 'scale-x-[-1]' : ''}`}></div>
+                {!isScanning && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-4 text-center space-y-3 z-10 bg-slate-900">
+                    <Camera className="w-12 h-12 text-indigo-400" />
+                    <p className="text-sm">Klik "Mula" untuk aktifkan kamera.</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <div className="mt-4 flex space-x-3">
-            {!isScanning ? (
-              <button onClick={startScanner} className="flex-1 bg-indigo-600 text-white py-3 px-4 rounded-xl font-medium flex justify-center space-x-2">
-                <Play className="w-4 h-4" /> <span>Mula Scan</span>
-              </button>
-            ) : (
-              <button onClick={stopScanner} className="flex-1 bg-rose-500 text-white py-3 px-4 rounded-xl font-medium flex justify-center space-x-2">
-                <Square className="w-4 h-4" /> <span>Hentikan</span>
-              </button>
-            )}
-          </div>
+              <div className="mt-3 flex space-x-3">
+                {!isScanning ? (
+                  <button onClick={startScanner} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 px-4 rounded-xl font-medium flex justify-center items-center space-x-2 transition shadow-sm">
+                    <Play className="w-4 h-4" /> <span className="text-sm">Mula Scan</span>
+                  </button>
+                ) : (
+                  <button onClick={stopScanner} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-2.5 px-4 rounded-xl font-medium flex justify-center items-center space-x-2 transition shadow-sm">
+                    <Square className="w-4 h-4" /> <span className="text-sm">Hentikan</span>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </section>
 
         {/* Bahagian Input Manual */}
@@ -293,8 +311,13 @@ export default function Scanner() {
               <tbody className="divide-y divide-slate-100">
                 {[...qrDataList].reverse().map((item, idx) => {
                   const actualIndex = qrDataList.length - 1 - idx;
+                  const isRecent = recentScanId === item.id;
+                  
                   return (
-                    <tr key={item.id || actualIndex}>
+                    <tr 
+                      key={item.id || actualIndex} 
+                      className={isRecent ? "bg-emerald-100/60 animate-pulse transition-colors duration-500" : "transition-colors duration-500"}
+                    >
                       <td className="px-4 py-2 font-semibold text-slate-400">{actualIndex + 1}</td>
                       <td className="px-4 py-2 break-all font-mono text-xs">
                         <div className="flex items-center space-x-2">
