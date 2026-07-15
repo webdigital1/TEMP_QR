@@ -1,0 +1,140 @@
+import { useState, useEffect } from 'react';
+import { Monitor, Smartphone, RefreshCw, FolderOpen, Search, Download } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbyWMRVjxxFRAm2X4Zq7-mNvRd34-tC9skre5lUQLA7dofFerXKAFa2l3EWPcYak1hVL/exec";
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const fetchData = () => {
+    setLoading(true);
+    fetch(`${SHEET_URL}?action=read`)
+      .then(res => res.json())
+      .then(fetchedData => {
+        setData(fetchedData);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const filteredData = data.filter((row, index) => {
+    if (index === 0) return false; // Abaikan header
+    if (!row[0] && !row[1] && !row[2]) return false;
+    
+    const searchLower = searchQuery.toLowerCase();
+    const qrResult = String(row[1] || "").toLowerCase();
+    const dateStr = String(row[2] || "").toLowerCase();
+    
+    return qrResult.includes(searchLower) || dateStr.includes(searchLower);
+  });
+
+  return (
+    <div className="bg-slate-50 text-slate-800 font-sans min-h-screen">
+      <nav className="bg-indigo-600 text-white shadow-md px-6 py-4 flex flex-wrap items-center justify-between sticky top-0 z-50 gap-4">
+        <div className="flex items-center space-x-3">
+          <Monitor className="w-7 h-7" />
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight">QR Data Dashboard</h1>
+        </div>
+        <div className="flex items-center space-x-3">
+          <button 
+            onClick={() => navigate('/scan')}
+            className="bg-indigo-800 hover:bg-indigo-900 text-white px-4 py-2 rounded-lg font-semibold text-sm transition flex items-center space-x-2 shadow-sm border border-indigo-700"
+          >
+            <Smartphone className="w-4 h-4" />
+            <span className="hidden sm:inline">Mod Kamera</span>
+          </button>
+          <div className="text-sm bg-indigo-500 px-3 py-1.5 rounded-full font-medium hidden md:flex items-center space-x-2">
+            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></span>
+            <span>Live dari Sheet</span>
+          </div>
+          <button 
+            onClick={fetchData}
+            disabled={loading}
+            className="bg-white text-indigo-600 hover:bg-slate-100 px-4 py-2 rounded-lg font-semibold text-sm transition flex items-center space-x-2 shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{loading ? 'Memuatkan...' : 'Muat Ulang'}</span>
+          </button>
+        </div>
+      </nav>
+
+      <main className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex items-center space-x-4">
+            <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600">
+              <FolderOpen className="w-8 h-8" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Jumlah Data Keseluruhan</p>
+              <h3 className="text-3xl font-bold text-slate-900">
+                {data.length > 0 ? data.length - 1 : 0}
+              </h3>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-center">
+            <p className="text-sm font-medium text-slate-500 mb-2">Cari Data</p>
+            <div className="relative">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Cari berdasarkan QR atau tarikh..." 
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+              />
+            </div>
+          </div>
+        </div>
+
+        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Jadual Data Imbasan</h2>
+            <a href={SHEET_URL.replace("/exec", "")} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700 text-sm font-semibold flex items-center space-x-1">
+              <span className="hidden sm:inline">Buka Google Sheet</span>
+              <Download className="w-4 h-4" />
+            </a>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-24">No.</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Hasil QR Code</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-64">Tarikh & Masa</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-100">
+                {filteredData.length > 0 ? (
+                  filteredData.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">{row[0]}</td>
+                      <td className="px-6 py-4 text-sm text-slate-700 font-mono select-all break-all">{row[1]}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{row[2]}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
+                      {loading ? 'Memuatkan data...' : 'Tiada data dijumpai.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
